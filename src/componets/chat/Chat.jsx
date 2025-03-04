@@ -7,6 +7,7 @@ import { doc, arrayUnion, getDoc, updateDoc } from "firebase/firestore";
 import { useChatStore } from "../../lib/chatStore";
 import { useUserStore } from "../../lib/userStore";
 import { format } from "date-fns";
+import upload from "../../lib/upload";
 
 const Chat = () => {
   const [chat, setChat] = useState();
@@ -54,18 +55,24 @@ const Chat = () => {
   };
 
   const handleSend = async () => {
-    if (text === "") return;
+    if (text === "" && !img.file) return;
 
     let imgUrl = null;
 
     try {
+      if (img.file) {
+        imgUrl = await upload(img.file);
+      }
+
+      const messageData = {
+        senderId: currentUser.id,
+        text: text || "",
+        createdAt: new Date(),
+        ...(imgUrl && { img: imgUrl }),
+      };
+
       await updateDoc(doc(db, "chats", chatId), {
-        messages: arrayUnion({
-          senderId: currentUser.id,
-          text,
-          createdAt: new Date(),
-          ...(imgUrl && { img: imgUrl }),
-        }),
+        messages: arrayUnion(messageData),
       });
 
       const userIDs = [currentUser.id, user.id];
@@ -81,7 +88,7 @@ const Chat = () => {
             (c) => c.chatId === chatId
           );
 
-          userChatsData.chats[chatIndex].lastMessage = text;
+          userChatsData.chats[chatIndex].lastMessage = text || "Image";
           userChatsData.chats[chatIndex].isSeen =
             id === currentUser.id ? true : false;
           userChatsData.chats[chatIndex].updatedAt = Date.now();
@@ -93,7 +100,7 @@ const Chat = () => {
       });
     } catch (err) {
       console.log(err);
-    } finally{
+    } finally {
       setImg({
         file: null,
         url: "",
